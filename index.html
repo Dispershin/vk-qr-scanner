@@ -197,13 +197,23 @@
         function sendToBot() {
             const serial = document.getElementById('serial').textContent;
             
-            vkBridge.send('VKWebAppCopyText', { text: serial }).then(() => {
-                showStatus('Скопировано! Вставьте в чат...', 'success');
+            vkBridge.send('VKWebAppSendToClient', {
+                type: 'text',
+                payload: serial
+            }).then(() => {
+                showStatus('Отправлено в бот!', 'success');
                 setTimeout(() => {
                     vkBridge.send('VKWebAppClose');
-                }, 800);
+                }, 500);
             }).catch(() => {
-                showStatus('Ошибка копирования', 'error');
+                vkBridge.send('VKWebAppCopyText', { text: serial }).then(() => {
+                    showStatus('Скопировано! Вставьте в чат.', 'info');
+                    setTimeout(() => {
+                        vkBridge.send('VKWebAppClose');
+                    }, 500);
+                }).catch(() => {
+                    showStatus('Ошибка отправки', 'error');
+                });
             });
         }
 
