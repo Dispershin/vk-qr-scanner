@@ -82,11 +82,6 @@
             background: var(--vkui--color_background_secondary, #e1e3e6);
             color: var(--vkui--color_text_primary, #000);
         }
-        #start-btn {
-            margin-top: 20px;
-            width: 100%;
-            max-width: 400px;
-        }
         #status {
             margin-top: 12px;
             padding: 10px;
@@ -103,8 +98,6 @@
 </head>
 <body>
     <h1>📷 Сканер QR</h1>
-    
-    <button id="start-btn" class="btn btn-primary">Начать сканирование</button>
     
     <div id="video-container" style="display:none;">
         <video id="video" playsinline></video>
@@ -130,17 +123,16 @@
         let animationId = null;
 
         vkBridge.send('VKWebAppInit').then(() => {
-            showStatus('Приложение загружено', 'info');
+            showStatus('Запуск камеры...', 'info');
+            startCamera();
         });
 
-        document.getElementById('start-btn').addEventListener('click', startCamera);
         document.getElementById('copy-btn').addEventListener('click', copyToClipboard);
         document.getElementById('send-btn').addEventListener('click', sendToBot);
         document.getElementById('restart-btn').addEventListener('click', restart);
 
         async function startCamera() {
             try {
-                document.getElementById('start-btn').style.display = 'none';
                 document.getElementById('video-container').style.display = 'block';
                 showStatus('Запуск камеры...', 'info');
 
@@ -155,8 +147,6 @@
                 scanFrame();
             } catch (err) {
                 showStatus('Ошибка камеры: ' + err.message, 'error');
-                document.getElementById('start-btn').style.display = 'block';
-                document.getElementById('video-container').style.display = 'none';
             }
         }
 
@@ -206,21 +196,20 @@
 
         function sendToBot() {
             const serial = document.getElementById('serial').textContent;
-            vkBridge.send('VKWebAppSendToClient', {
-                type: 'text',
-                payload: serial
-            }).then(() => {
-                showStatus('Отправлено в бот!', 'success');
+            
+            vkBridge.send('VKWebAppCopyText', { text: serial }).then(() => {
+                showStatus('Скопировано! Вставьте в чат...', 'success');
+                setTimeout(() => {
+                    vkBridge.send('VKWebAppClose');
+                }, 800);
             }).catch(() => {
-                copyToClipboard();
-                showStatus('Скопировано. Вставьте в чат вручную.', 'info');
+                showStatus('Ошибка копирования', 'error');
             });
         }
 
         function restart() {
             document.getElementById('result').classList.remove('show');
             document.getElementById('video-container').style.display = 'block';
-            document.getElementById('start-btn').style.display = 'none';
             startCamera();
         }
 
