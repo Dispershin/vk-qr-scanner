@@ -152,7 +152,7 @@
             document.getElementById('serial').textContent = serial;
             document.getElementById('result').classList.add('show');
             document.getElementById('video-container').style.display = 'none';
-            showStatus('QR-код распознан! Копирование...', 'success');
+            showStatus('QR-код распознан!', 'success');
 
             vkBridge.send('VKWebAppCopyText', { text: serial }).then(() => {
                 showStatus('Скопировано! Возврат в бот...', 'success');
@@ -166,7 +166,9 @@
                         vkBridge.send('VKWebAppClose');
                     }, 500);
                 }).catch(() => {
-                    showStatus('Ошибка копирования', 'error');
+                    setTimeout(() => {
+                        vkBridge.send('VKWebAppClose');
+                    }, 1000);
                 });
             });
         }
