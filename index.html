@@ -152,23 +152,21 @@
             document.getElementById('serial').textContent = serial;
             document.getElementById('result').classList.add('show');
             document.getElementById('video-container').style.display = 'none';
-            showStatus('QR-код распознан! Отправка в бот...', 'success');
+            showStatus('QR-код распознан! Копирование...', 'success');
 
-            vkBridge.send('VKWebAppSendToClient', {
-                type: 'text',
-                payload: serial
-            }).then(() => {
+            vkBridge.send('VKWebAppCopyText', { text: serial }).then(() => {
+                showStatus('Скопировано! Возврат в бот...', 'success');
                 setTimeout(() => {
                     vkBridge.send('VKWebAppClose');
-                }, 300);
+                }, 500);
             }).catch(() => {
-                vkBridge.send('VKWebAppCopyText', { text: serial }).then(() => {
-                    showStatus('Скопировано в буфер обмена', 'info');
+                navigator.clipboard.writeText(serial).then(() => {
+                    showStatus('Скопировано! Возврат в бот...', 'success');
                     setTimeout(() => {
                         vkBridge.send('VKWebAppClose');
                     }, 500);
                 }).catch(() => {
-                    showStatus('Ошибка отправки', 'error');
+                    showStatus('Ошибка копирования', 'error');
                 });
             });
         }
