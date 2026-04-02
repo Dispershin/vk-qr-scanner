@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Сканер QR</title>
+    <script src="https://unpkg.com/@vkontakte/vk-bridge/dist/browser.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Roboto', sans-serif;
+            background: var(--vkui--color_background, #ffffff);
+            color: var(--vkui--color_text_primary, #000000);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 16px;
+        }
+        h1 { font-size: 20px; margin-bottom: 16px; }
+        #video-container {
+            position: relative;
+            width: 100%;
+            max-width: 400px;
+            aspect-ratio: 1;
+            border-radius: 12px;
+            overflow: hidden;
+            background: #000;
+        }
+        #video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        #canvas { display: none; }
+        #scan-line {
+            position: absolute;
+            top: 50%;
+            left: 10%;
+            right: 10%;
+            height: 2px;
+            background: #00ff00;
+            box-shadow: 0 0 10px #00ff00;
+            animation: scan 2s ease-in-out infinite;
+        }
+        @keyframes scan {
+            0%, 100% { transform: translateY(-50px); }
+            50% { transform: translateY(50px); }
+        }
+        #result {
+            margin-top: 16px;
+            padding: 16px;
+            background: var(--vkui--color_background_secondary, #f0f2f5);
+            border-radius: 12px;
+            width: 100%;
+            max-width: 400px;
+            display: none;
+        }
+        #result.show { display: block; }
+        #serial {
+            font-size: 16px;
+            font-weight: 600;
+            word-break: break-all;
+            margin-bottom: 12px;
+        }
+        .btn {
+            padding: 12px 20px;
+            border: none;
+            border-radius: 8px;
+            font-size: 15px;
+            font-weight: 500;
+            cursor: pointer;
+            margin: 4px;
+            width: 100%;
+        }
+        .btn-primary {
+            background: var(--vkui--color_button_primary, #0077FF);
+            color: white;
+        }
+        .btn-secondary {
+            background: var(--vkui--color_background_secondary, #e1e3e6);
+            color: var(--vkui--color_text_primary, #000);
+        }
+        #start-btn {
+            margin-top: 20px;
+            width: 100%;
+            max-width: 400px;
+        }
+        #status {
+            margin-top: 12px;
+            padding: 10px;
+            border-radius: 8px;
+            text-align: center;
+            font-size: 14px;
+            width: 100%;
+            max-width: 400px;
+        }
+        .status-info { background: #e3f2fd; color: #1565c0; }
+        .status-success { background: #e8f5e9; color: #2e7d32; }
+        .status-error { background: #ffebee; color: #c62828; }
+    </style>
+</head>
+<body>
+    <h1>📷 Сканер QR</h1>
+    
+    <button id="start-btn" class="btn btn-primary">Начать сканирование</button>
+    
+    <div id="video-container" style="display:none;">
+        <video id="video" playsinline></video>
+        <div id="scan-line"></div>
+    </div>
+    <canvas id="canvas"></canvas>
+    
+    <div id="result">
+        <div id="serial"></div>
+        <button id="copy-btn" class="btn btn-primary">📋 Копировать</button>
+        <button id="send-btn" class="btn btn-primary">✅ Отправить в бот</button>
+        <button id="restart-btn" class="btn btn-secondary">🔄 Сканировать снова</button>
+    </div>
+    
+    <div id="status"></div>
+
+    <script>
+        let video = document.getElementById('video');
+        let canvas = document.getElementById('canvas');
+        let ctx = canvas.getContext('2d', { willReadFrequently: true });
+        let stream = null;
+        let scanning = false;
+        let animationId = null;
+
+        vkBridge.send('VKWebAppInit').then(() => {
+            showStatus('Приложение загружено', 'info');
+        });
+
+        document.getElementById('start-btn').addEventListener('click', startCamera);
+        document.getElementById('copy-btn').addEventListener('click', copyToClipboard);
+        document.getElementById('send-btn').addEventListener('click', sendToBot);
+        document.getElementById('restart-btn').addEventListener('click', restart);
+
+        async function startCamera() {
+            try {
+                document.getElementById('start-btn').style.display = 'none';
+                document.getElementById('video-container').style.display = 'block';
+                showStatus('Запуск камеры...', 'info');
+
+                stream = await navigator.mediaDevices.getUserMedia({
+                    video: { facingMode: 'environment', width: { ideal: 640 }, height: { ideal: 640 } }
+                });
+                video.srcObject = stream;
+                await video.play();
+
+                scanning = true;
+                showStatus('Наведите камеру на QR-код', 'info');
+                scanFrame();
+            } catch (err) {
+                showStatus('Ошибка камеры: ' + err.message, 'error');
+                document.getElementById('start-btn').style.display = 'block';
+                document.getElementById('video-container').style.display = 'none';
+            }
+        }
+
+        function scanFrame() {
+            if (!scanning) return;
+            if (video.readyState === video.HAVE_ENOUGH_DATA) {
+                canvas.width = video.videoWidth;
+                canvas.height = video.videoHeight;
+                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                const code = jsQR(imageData.data, imageData.width, imageData.height, {
+                    inversionAttempts: 'dontInvert'
+                });
+                if (code) {
+                    onScanSuccess(code.data);
+                    return;
+                }
+            }
+            animationId = requestAnimationFrame(scanFrame);
+        }
+
+        function onScanSuccess(serial) {
+            scanning = false;
+            if (animationId) cancelAnimationFrame(animationId);
+            if (stream) {
+                stream.getTracks().forEach(track => track.stop());
+            }
+
+            document.getElementById('serial').textContent = serial;
+            document.getElementById('result').classList.add('show');
+            document.getElementById('video-container').style.display = 'none';
+            showStatus('QR-код распознан!', 'success');
+
+            vkBridge.send('VKWebAppCopyText', { text: serial }).catch(() => {});
+        }
+
+        function copyToClipboard() {
+            const serial = document.getElementById('serial').textContent;
+            navigator.clipboard.writeText(serial).then(() => {
+                showStatus('Скопировано!', 'success');
+            }).catch(() => {
+                vkBridge.send('VKWebAppCopyText', { text: serial }).then(() => {
+                    showStatus('Скопировано!', 'success');
+                });
+            });
+        }
+
+        function sendToBot() {
+            const serial = document.getElementById('serial').textContent;
+            vkBridge.send('VKWebAppSendToClient', {
+                type: 'text',
+                payload: serial
+            }).then(() => {
+                showStatus('Отправлено в бот!', 'success');
+            }).catch(() => {
+                copyToClipboard();
+                showStatus('Скопировано. Вставьте в чат вручную.', 'info');
+            });
+        }
+
+        function restart() {
+            document.getElementById('result').classList.remove('show');
+            document.getElementById('video-container').style.display = 'block';
+            document.getElementById('start-btn').style.display = 'none';
+            startCamera();
+        }
+
+        function showStatus(msg, type) {
+            const el = document.getElementById('status');
+            el.textContent = msg;
+            el.className = 'status-' + type;
+        }
+    </script>
+</body>
+</html>
