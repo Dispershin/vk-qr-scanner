@@ -152,15 +152,22 @@
             document.getElementById('serial').textContent = serial;
             document.getElementById('result').classList.add('show');
             document.getElementById('video-container').style.display = 'none';
-            showStatus('QR-код распознан! Возврат в бот...', 'success');
+            showStatus('QR-код распознан! Закрываю...', 'success');
 
+            // Сначала копируем текст
             vkBridge.send('VKWebAppCopyText', { text: serial }).catch(() => {
                 navigator.clipboard.writeText(serial).catch(() => {});
             });
 
-            setTimeout(() => {
-                window.history.back();
-            }, 800);
+            // Сразу закрываем мини-приложение
+            vkBridge.send('VKWebAppClose', { status: 'success' }).catch(() => {
+                // Если VKWebAppClose не сработал, пробуем через 500мс
+                setTimeout(() => {
+                    vkBridge.send('VKWebAppClose', { status: 'success' }).catch(() => {
+                        showStatus('Закройте это окно вручную и вставьте серийный номер', 'info');
+                    });
+                }, 500);
+            });
         }
 
         function showStatus(msg, type) {
